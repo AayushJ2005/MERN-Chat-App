@@ -4,7 +4,7 @@ import { io } from "socket.io-client";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify'; 
 
-const ENDPOINT = "http://localhost:5000"; 
+const ENDPOINT = "https://mern-chat-app-o0zp.onrender.com"; 
 let socket;
 
 const Chatpage = () => {
