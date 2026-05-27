@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Scrollbar ko hide karne ke liye par scrolling on rakhne ke liye */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}

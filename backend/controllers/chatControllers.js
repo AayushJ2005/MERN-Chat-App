@@ -1,0 +1,126 @@
+import asyncHandler from "express-async-handler";
+import Chat from "../models/chatModel.js";
+import User from "../models/userModel.js";
+
+// @description     Create or fetch One to One Chat
+// @route           POST /api/chat/
+// @access          Protected
+const accessChat = asyncHandler(async (req, res) => {
+    // Frontend se us user ki ID aayegi jisse hume chat karni hai
+    const { userId } = req.body; 
+
+    if (!userId) {
+        console.log("UserId param not sent with request");
+        return res.sendStatus(400);
+    }
+
+    // Check karte hain ki kya dono users ke beech pehle se chat hai
+    var isChat = await Chat.find({
+        isGroupChat: false,
+        $and: [
+            { users: { $elemMatch: { $eq: req.user._id } } }, // Logged in user
+            { users: { $elemMatch: { $eq: userId } } },       // Wo user jisse chat karni hai
+        ],
+    })
+    .populate("users", "-password")
+    .populate("latestMessage");
+
+    isChat = await User.populate(isChat, {
+        path: "latestMessage.sender",
+        select: "name pic email",
+    });
+
+    if (isChat.length > 0) {
+        // Agar chat mil gayi, toh usko bhej do
+        res.send(isChat[0]);
+    } else {
+        // Agar nahi mili, toh ek nayi chat database mein banao
+        var chatData = {
+            chatName: "sender",
+            isGroupChat: false,
+            users: [req.user._id, userId],
+        };
+
+        try {
+            const createdChat = await Chat.create(chatData);
+            const FullChat = await Chat.findOne({ _id: createdChat._id }).populate(
+                "users",
+                "-password"
+            );
+            res.status(200).json(FullChat);
+        } catch (error) {
+            res.status(400);
+            throw new Error(error.message);
+        }
+    }
+});
+
+// @description     Fetch all chats for a user
+// @route           GET /api/chat/
+// @access          Protected
+const fetchChats = asyncHandler(async (req, res) => {
+    try {
+        // Database mein wo saari chats dhundho jisme current logged-in user mojood hai
+        Chat.find({ users: { $elemMatch: { $eq: req.user._id } } })
+            .populate("users", "-password")
+            .populate("groupAdmin", "-password")
+            .populate("latestMessage")
+            .sort({ updatedAt: -1 }) // Sabse nayi chat upar dikhane ke liye sort
+            .then(async (results) => {
+                results = await User.populate(results, {
+                    path: "latestMessage.sender",
+                    select: "name pic email",
+                });
+                res.status(200).send(results);
+            });
+    } catch (error) {
+        res.status(400);
+        throw new Error(error.message);
+    }
+});
+
+// @description     Create New Group Chat
+// @route           POST /api/chat/group
+// @access          Protected
+const createGroupChat = asyncHandler(async (req, res) => {
+  // Check karo ki frontend ne users aur group ka naam bheja hai ya nahi
+  if (!req.body.users || !req.body.name) {
+    return res.status(400).send({ message: "Please Fill all the fields" });
+  }
+
+  // Frontend se array hamesha string format mein aata hai, usko wapas array banate hain
+  var users = JSON.parse(req.body.users);
+
+  // Group mein kam se kam 2 log (tere ilawa) hone chahiye
+  if (users.length < 2) {
+    return res.status(400).send("More than 2 users are required to form a group chat");
+  }
+
+  // Jisne group banaya hai (logged-in user), usko bhi array mein add kar do
+  users.push(req.user);
+
+  try {
+    // Database mein group create kar rahe hain
+    const groupChat = await Chat.create({
+      chatName: req.body.name,
+      users: users,
+      isGroupChat: true,
+      groupAdmin: req.user, // Logged in user ko admin bana diya
+    });
+
+    // Group banne ke baad, uski poori details nikal kar bhej do
+    const fullGroupChat = await Chat.findOne({ _id: groupChat._id })
+      .populate("users", "-password")
+      .populate("groupAdmin", "-password");
+
+    res.status(200).json(fullGroupChat);
+  } catch (error) {
+    res.status(400);
+    throw new Error(error.message);
+  }
+});
+
+
+
+
+export { accessChat, fetchChats, createGroupChat };
