@@ -3,6 +3,9 @@ import User from "../models/userModel.js";
 import generateToken from "../config/generateToken.js";
 import transporter from "../config/nodemailer.js";
 
+import dns from "dns";
+dns.setDefaultResultOrder("ipv4first");
+
 const otpStore = new Map();
 
 // @description     Step 1: Send OTP to Email
