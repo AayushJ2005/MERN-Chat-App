@@ -6,6 +6,7 @@ import chatRoutes from "./routes/chatRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import cors from "cors";
 
 dotenv.config();
 connectDB({ family: 4 });
@@ -13,17 +14,22 @@ connectDB({ family: 4 });
 const app = express();
 app.use(express.json());
 
+// Express API ke liye CORS (BINA SLASH KE)
+app.use(cors({
+  origin: "https://mern-chat-app-umber-phi.vercel.app" 
+}));
+
 const server = createServer(app);
 
-// Socket.io ka setup
+// Socket.io ka setup (BINA SLASH KE)
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "http://localhost:5173", // Tera frontend URL
+    origin: "https://mern-chat-app-umber-phi.vercel.app", 
   },
 });
 
-// --- NAYA LOGIC: Online users track karne ke liye array ---
+// Online users track karne ke liye array
 let onlineUsers = [];
 
 io.on("connection", (socket) => {
@@ -63,7 +69,7 @@ io.on("connection", (socket) => {
   socket.on("typing", (room) => socket.in(room).emit("typing"));
   socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
 
-  // --- NAYA LOGIC: Jab user app band karta hai ya tab close karta hai ---
+  // --- Jab user app band karta hai ya tab close karta hai ---
   socket.on("disconnect", () => {
     // User ko online list se nikal do
     onlineUsers = onlineUsers.filter((user) => user.socketId !== socket.id);
