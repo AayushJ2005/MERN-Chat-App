@@ -6,53 +6,52 @@ import User from "../models/userModel.js";
 // @route           POST /api/chat/
 // @access          Protected
 const accessChat = asyncHandler(async (req, res) => {
-    // Frontend se us user ki ID aayegi jisse hume chat karni hai
-    const { userId } = req.body; 
+  const { userId } = req.body;
 
-    if (!userId) {
-        console.log("UserId param not sent with request");
-        return res.sendStatus(400);
-    }
+  if (!userId) {
+    console.log("UserId param not sent with request");
+    return res.sendStatus(400);
+  }
 
-    // Check karte hain ki kya dono users ke beech pehle se chat hai
-    var isChat = await Chat.find({
-        isGroupChat: false,
-        $and: [
-            { users: { $elemMatch: { $eq: req.user._id } } }, // Logged in user
-            { users: { $elemMatch: { $eq: userId } } },       // Wo user jisse chat karni hai
-        ],
-    })
+  // Pehle check karo ki kya dono users ke beech koi chat exist karti hai
+  var isChat = await Chat.find({
+    isGroupChat: false,
+    $and: [
+      { users: { $elemMatch: { $eq: req.user._id } } },
+      { users: { $elemMatch: { $eq: userId } } },
+    ],
+  })
     .populate("users", "-password")
     .populate("latestMessage");
 
-    isChat = await User.populate(isChat, {
-        path: "latestMessage.sender",
-        select: "name pic email",
-    });
+  isChat = await User.populate(isChat, {
+    path: "latestMessage.sender",
+    select: "name pic email",
+  });
 
-    if (isChat.length > 0) {
-        // Agar chat mil gayi, toh usko bhej do
-        res.send(isChat[0]);
-    } else {
-        // Agar nahi mili, toh ek nayi chat database mein banao
-        var chatData = {
-            chatName: "sender",
-            isGroupChat: false,
-            users: [req.user._id, userId],
-        };
+  // Agar chat mil gayi, toh usko return kar do
+  if (isChat.length > 0) {
+    res.send(isChat[0]);
+  } else {
+    // Agar nahi mili, toh ek nayi chat create karo
+    var chatData = {
+      chatName: "sender",
+      isGroupChat: false,
+      users: [req.user._id, userId],
+    };
 
-        try {
-            const createdChat = await Chat.create(chatData);
-            const FullChat = await Chat.findOne({ _id: createdChat._id }).populate(
-                "users",
-                "-password"
-            );
-            res.status(200).json(FullChat);
-        } catch (error) {
-            res.status(400);
-            throw new Error(error.message);
-        }
+    try {
+      const createdChat = await Chat.create(chatData);
+      const FullChat = await Chat.findOne({ _id: createdChat._id }).populate(
+        "users",
+        "-password"
+      );
+      res.status(200).json(FullChat);
+    } catch (error) {
+      res.status(400);
+      throw new Error(error.message);
     }
+  }
 });
 
 // @description     Fetch all chats for a user
