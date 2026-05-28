@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { auth, provider } from "../firebase"; // Path check kar lena
+import { auth, provider } from "../firebase";
 import { signInWithPopup } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
@@ -12,10 +12,11 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // --- Normal OTP/Signup Logic (Purana wala) ---
+  // --- NAYA: Direct Signup Logic (No OTP, No Photo) ---
   const submitHandler = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
     if (!name || !email || !password || !confirmPassword) {
       alert("Please fill all the fields!");
       setLoading(false);
@@ -26,20 +27,25 @@ const Signup = () => {
       setLoading(false);
       return;
     }
+
     try {
       const config = { headers: { "Content-type": "application/json" } };
-      // Yahan tera send-otp wala route call hoga
-      await axios.post("/api/user/send-otp", { name, email, password }, config);
-      alert("OTP Sent! (Render logs check kar lena ya Brevo setup dekh lena)");
+      
+      // Seedha backend ke naye register route par bheja
+      const { data } = await axios.post("/api/user", { name, email, password }, config);
+      
+      alert("Registration Successful! 🚀");
+      localStorage.setItem("userInfo", JSON.stringify(data));
       setLoading(false);
-      // Yahan OTP verify karne wala modal ya logic aayega
+      navigate("/chats");
+      
     } catch (error) {
-      alert(error.response.data.message || "Error occurred!");
+      alert(error.response?.data?.message || "Error occurred!");
       setLoading(false);
     }
   };
 
-  // --- NAYA: Google Signup Logic ---
+  // --- Google Signup Logic ---
   const handleGoogleSignup = async (e) => {
     e.preventDefault();
     try {
@@ -48,7 +54,7 @@ const Signup = () => {
 
       const config = { headers: { "Content-type": "application/json" } };
       const { data } = await axios.post(
-        "/api/user/google-login", // Same login wala route chalega dono ke liye
+        "/api/user/google-login",
         {
           name: user.displayName,
           email: user.email,
@@ -114,16 +120,17 @@ const Signup = () => {
           />
         </div>
 
+        {/* Photo upload wala input hamesha ke liye uda diya */}
+
         <button 
           type="submit" 
           disabled={loading}
           style={{ width: "100%", backgroundColor: "#2563eb", color: "white", padding: "10px", borderRadius: "5px", border: "none", cursor: "pointer", marginTop: "10px" }}
         >
-          {loading ? "Sending OTP..." : "Send OTP"}
+          {loading ? "Signing up..." : "Sign Up"}
         </button>
       </form>
 
-      {/* --- NAYA: Google Signup Button --- */}
       <button 
         onClick={handleGoogleSignup} 
         style={{ width: "100%", backgroundColor: "#DB4437", color: "white", padding: "10px", borderRadius: "5px", border: "none", cursor: "pointer", fontWeight: "bold" }}

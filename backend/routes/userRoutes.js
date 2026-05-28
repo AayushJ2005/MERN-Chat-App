@@ -1,13 +1,10 @@
 import express from "express";
-import { sendOTP, verifyOTP, authUser, allUsers, updateUserProfile } from "../controllers/userControllers.js";
+import { registerUser, authUser, allUsers, updateUserProfile } from "../controllers/userControllers.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { googleLogin } from "../controllers/userControllers.js";
 
 const router = express.Router();
 
-// Naye OTP wale routes
-router.post("/send-otp", sendOTP);
-router.post("/verify-otp", verifyOTP);
 
 // Login route
 router.post("/login", authUser);
