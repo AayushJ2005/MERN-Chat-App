@@ -124,20 +124,23 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 const googleLogin = asyncHandler(async (req, res) => {
   const { name, email, pic } = req.body;
 
-  // Pehle check karo ki user pehle se database mein hai ya nahi
   let user = await User.findOne({ email });
 
   if (!user) {
-    // Agar naya user hai, toh MongoDB mein create kar do
+    // Agar naya user hai, toh create karo
     user = await User.create({
       name,
       email,
       pic,
-      password: Date.now().toString() + Math.random().toString(), // Random password
+      password: Date.now().toString() + Math.random().toString(), 
     });
+  } else {
+    // ASLEE MAGIC YAHAN HAI: 
+    // Agar purana user hai, toh uski photo ko Google ki nayi photo se update kar do
+    user.pic = pic;
+    await user.save();
   }
 
-  // User ko token dekar login karwa do
   res.json({
     _id: user._id,
     name: user.name,

@@ -120,7 +120,87 @@ const createGroupChat = asyncHandler(async (req, res) => {
   }
 });
 
+// @description    Rename Group
+// @route          PUT /api/chat/rename
+// @access         Protected
+const renameGroup = asyncHandler(async (req, res) => {
+  const { chatId, chatName } = req.body;
+
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId,
+    { chatName: chatName },
+    { new: true } // Yeh naya updated data wapas karega
+  )
+    .populate("users", "-password")
+    .populate("groupAdmin", "-password");
+
+  if (!updatedChat) {
+    res.status(404);
+    throw new Error("Chat Not Found");
+  } else {
+    res.json(updatedChat);
+  }
+});
+
+// @description    Add user to Group
+// @route          PUT /api/chat/groupadd
+// @access         Protected
+const addToGroup = asyncHandler(async (req, res) => {
+  const { chatId, userId } = req.body;
+
+  // $push use hota hai array mein naya item jodne ke liye
+  const added = await Chat.findByIdAndUpdate(
+    chatId,
+    { $push: { users: userId } },
+    { new: true }
+  )
+    .populate("users", "-password")
+    .populate("groupAdmin", "-password");
+
+  if (!added) {
+    res.status(404);
+    throw new Error("Chat Not Found");
+  } else {
+    res.json(added);
+  }
+});
+
+// @description    Remove user from Group (or Leave Group)
+// @route          PUT /api/chat/groupremove
+// @access         Protected
+const removeFromGroup = asyncHandler(async (req, res) => {
+  const { chatId, userId } = req.body;
+
+  // $pull use hota hai array se kisi ko nikalne ke liye
+  const removed = await Chat.findByIdAndUpdate(
+    chatId,
+    { $pull: { users: userId } },
+    { new: true }
+  )
+    .populate("users", "-password")
+    .populate("groupAdmin", "-password");
+
+  if (!removed) {
+    res.status(404);
+    throw new Error("Chat Not Found");
+  } else {
+    res.json(removed);
+  }
+});
+
+// @description    Update Group Photo
+// @route          PUT /api/chat/grouppic
+// @access         Protected
+const updateGroupPic = asyncHandler(async (req, res) => {
+  const { chatId, groupPic } = req.body;
+
+  const updatedChat = await Chat.findByIdAndUpdate(
+    chatId, { groupPic }, { new: true }
+  ).populate("users", "-password").populate("groupAdmin", "-password");
+
+  if (!updatedChat) { res.status(404); throw new Error("Chat Not Found"); }
+  res.json(updatedChat);
+});
 
 
-
-export { accessChat, fetchChats, createGroupChat };
+export { accessChat, fetchChats, createGroupChat, renameGroup, addToGroup, removeFromGroup, updateGroupPic };

@@ -3,6 +3,10 @@ import mongoose from "mongoose";
 const chatSchema = mongoose.Schema(
   {
     chatName: { type: String, trim: true },
+    groupPic: { 
+      type: String, 
+      default: "https://cdn-icons-png.flaticon.com/512/166/166258.png" 
+    },
     isGroupChat: { type: Boolean, default: false },
     
     // Ek chat mein kaun kaun log hain (Array of Users)
