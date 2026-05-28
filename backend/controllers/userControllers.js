@@ -176,4 +176,32 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   }
 });
 
-export { sendOTP, verifyOTP, authUser, allUsers, updateUserProfile };
+// @description    Google Login
+// @route          POST /api/user/google-login
+const googleLogin = asyncHandler(async (req, res) => {
+  const { name, email, pic } = req.body;
+
+  // Pehle check karo ki user pehle se database mein hai ya nahi
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    // Agar naya user hai, toh MongoDB mein create kar do
+    user = await User.create({
+      name,
+      email,
+      pic,
+      password: Date.now().toString() + Math.random().toString(), // Random password
+    });
+  }
+
+  // User ko token dekar login karwa do
+  res.json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    pic: user.pic,
+    token: generateToken(user._id),
+  });
+});
+
+export { sendOTP, verifyOTP, authUser, allUsers, updateUserProfile, googleLogin };

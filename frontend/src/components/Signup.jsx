@@ -1,140 +1,135 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import React, { useState } from "react";
+import axios from "axios";
+import { auth, provider } from "../firebase"; // Path check kar lena
+import { signInWithPopup } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  
-  // Naye states OTP ke liye
-  const [otp, setOtp] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false); // Check karega ki OTP bhej diya ya nahi
-
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // STEP 1: Details bhejna aur OTP mangwana
-  const submitDetailsHandler = async (e) => {
+  // --- Normal OTP/Signup Logic (Purana wala) ---
+  const submitHandler = async (e) => {
     e.preventDefault();
-    
+    setLoading(true);
     if (!name || !email || !password || !confirmPassword) {
-      toast.warning("Bhai, saare fields bharne zaroori hain!");
+      alert("Please fill all the fields!");
+      setLoading(false);
       return;
     }
-
     if (password !== confirmPassword) {
-      toast.error("Passwords match nahi kar rahe!");
+      alert("Passwords do not match!");
+      setLoading(false);
       return;
     }
-
     try {
       const config = { headers: { "Content-type": "application/json" } };
-
-      // Naya route use kar rahe hain: /api/user/send-otp
+      // Yahan tera send-otp wala route call hoga
       await axios.post("/api/user/send-otp", { name, email, password }, config);
-
-      toast.success("OTP sent to your email! 📩");
-      setIsOtpSent(true); // Isse form change hoke OTP wala box aa jayega
-
+      alert("OTP Sent! (Render logs check kar lena ya Brevo setup dekh lena)");
+      setLoading(false);
+      // Yahan OTP verify karne wala modal ya logic aayega
     } catch (error) {
-      toast.error(error.response?.data?.message || "Error sending OTP!");
+      alert(error.response.data.message || "Error occurred!");
+      setLoading(false);
     }
   };
 
-  // STEP 2: OTP Verify karna aur Final Register karna
-  const verifyOtpHandler = async (e) => {
+  // --- NAYA: Google Signup Logic ---
+  const handleGoogleSignup = async (e) => {
     e.preventDefault();
-
-    if (!otp) {
-      toast.warning("Bhai, pehle OTP toh daal!");
-      return;
-    }
-
     try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
       const config = { headers: { "Content-type": "application/json" } };
+      const { data } = await axios.post(
+        "/api/user/google-login", // Same login wala route chalega dono ke liye
+        {
+          name: user.displayName,
+          email: user.email,
+          pic: user.photoURL,
+        },
+        config
+      );
 
-      // OTP verify karne wala route
-      const { data } = await axios.post("/api/user/verify-otp", { email, otp }, config);
-
-      toast.success("Registration Successful! 🎉 Welcome!");
-
-      // User ka token save karna
       localStorage.setItem("userInfo", JSON.stringify(data));
-      
-      setTimeout(() => {
-        navigate('/chats'); 
-      }, 1500);
-
+      alert("Google Signup Successful! 🚀");
+      navigate("/chats");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Invalid OTP ❌");
+      console.error("Google Signup Error:", error);
+      alert("Google se signup nahi ho paya.");
     }
   };
 
   return (
-    <div>
-      {/* Agar OTP nahi bheja hai, toh normal form dikhao */}
-      {!isOtpSent ? (
-        <form onSubmit={submitDetailsHandler} className="flex flex-col gap-3">
-          <div>
-            <label className="block text-gray-700 font-medium mb-1 text-sm">Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your name" />
-          </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+      <form onSubmit={submitHandler} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        
+        <div>
+          <label>Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter your name"
+            style={{ width: "100%", padding: "8px", marginTop: "5px", borderRadius: "5px", border: "1px solid #ccc" }}
+          />
+        </div>
 
-          <div>
-            <label className="block text-gray-700 font-medium mb-1 text-sm">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your email" />
-          </div>
+        <div>
+          <label>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            style={{ width: "100%", padding: "8px", marginTop: "5px", borderRadius: "5px", border: "1px solid #ccc" }}
+          />
+        </div>
 
-          <div>
-            <label className="block text-gray-700 font-medium mb-1 text-sm">Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Create a password" />
-          </div>
+        <div>
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            style={{ width: "100%", padding: "8px", marginTop: "5px", borderRadius: "5px", border: "1px solid #ccc" }}
+          />
+        </div>
 
-          <div>
-            <label className="block text-gray-700 font-medium mb-1 text-sm">Confirm Password</label>
-            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Confirm your password" />
-          </div>
+        <div>
+          <label>Confirm Password</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm your password"
+            style={{ width: "100%", padding: "8px", marginTop: "5px", borderRadius: "5px", border: "1px solid #ccc" }}
+          />
+        </div>
 
-          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200 mt-2 shadow-md">
-            Send OTP
-          </button>
-        </form>
-      ) : (
-        // Agar OTP bhej diya hai, toh yeh wala form dikhao
-        <form onSubmit={verifyOtpHandler} className="flex flex-col gap-4 animate-pulse-once">
-          <div className="bg-blue-50 p-4 rounded-md border border-blue-100 text-center">
-            <p className="text-sm text-blue-800 font-medium">
-              We've sent a 6-digit code to <br/><span className="font-bold">{email}</span>
-            </p>
-          </div>
+        <button 
+          type="submit" 
+          disabled={loading}
+          style={{ width: "100%", backgroundColor: "#2563eb", color: "white", padding: "10px", borderRadius: "5px", border: "none", cursor: "pointer", marginTop: "10px" }}
+        >
+          {loading ? "Sending OTP..." : "Send OTP"}
+        </button>
+      </form>
 
-          <div>
-            <label className="block text-gray-700 font-medium mb-1 text-sm text-center">Enter OTP</label>
-            <input 
-              type="text" 
-              value={otp} 
-              onChange={(e) => setOtp(e.target.value)} 
-              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl tracking-widest font-bold" 
-              placeholder="------" 
-              maxLength="6"
-            />
-          </div>
-
-          <button type="submit" className="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700 transition duration-200 shadow-md">
-            Verify & Register
-          </button>
-
-          <button 
-            type="button" 
-            onClick={() => setIsOtpSent(false)} 
-            className="text-sm text-gray-500 hover:text-blue-600 underline text-center"
-          >
-            Wrong email? Go back
-          </button>
-        </form>
-      )}
+      {/* --- NAYA: Google Signup Button --- */}
+      <button 
+        onClick={handleGoogleSignup} 
+        style={{ width: "100%", backgroundColor: "#DB4437", color: "white", padding: "10px", borderRadius: "5px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+      >
+        Sign up with Google
+      </button>
     </div>
   );
 };
