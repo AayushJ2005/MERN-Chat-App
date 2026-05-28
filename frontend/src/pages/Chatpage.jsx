@@ -45,10 +45,8 @@ const Chatpage = () => {
   const [renameLoading, setRenameLoading] = useState(false);
   const [groupPicLoading, setGroupPicLoading] = useState(false);
 
-  // --- NOTIFICATION STATES ---
+  // --- NOTIFICATION STATE (Sirf array chahiye badge ke liye, ghanti hata di) ---
   const [notification, setNotification] = useState([]);
-  const [isNotifOpen, setIsNotifOpen] = useState(false); 
-
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -126,16 +124,32 @@ const Chatpage = () => {
 
   useEffect(() => { fetchMessages(); }, [selectedChat]);
 
-  // --- SMART SOCKET LISTENER FOR NOTIFICATIONS ---
+  // --- SOCKET LISTENER: NOTIFICATIONS & PUSH TO TOP ---
   useEffect(() => {
     const messageListener = (newMessageRecieved) => {
+      // 1. Agar chat open nahi hai, toh notification array me daalo
       if (!selectedChat || selectedChat._id !== newMessageRecieved.chat._id) {
         if (!notification.includes(newMessageRecieved)) {
           setNotification([newMessageRecieved, ...notification]);
         }
       } else {
+        // Agar chat open hai, toh screen par message dikhao
         setMessages((prevMessages) => [...prevMessages, newMessageRecieved]);
       }
+
+      // 2. Chat ko utha kar list mein Number 1 (Top) par daalo
+      setChats((prevChats) => {
+        const chatIndex = prevChats.findIndex((c) => c._id === newMessageRecieved.chat._id);
+        
+        if (chatIndex !== -1) {
+          const chatToMove = prevChats[chatIndex];
+          chatToMove.latestMessage = newMessageRecieved; // Sidebar ka text update karo
+          const otherChats = prevChats.filter((c) => c._id !== newMessageRecieved.chat._id);
+          return [chatToMove, ...otherChats]; // Top par chipka diya
+        } else {
+          return [newMessageRecieved.chat, ...prevChats];
+        }
+      });
     };
 
     socket.on("message received", messageListener);
@@ -164,10 +178,25 @@ const Chatpage = () => {
       try {
         const config = { headers: { "Content-type": "application/json", Authorization: `Bearer ${userInfo.token}` } };
         const messageToSend = newMessage;
-        setNewMessage("");
+        setNewMessage(""); // Input clear karo
+        
         const { data } = await axios.post("/api/message", { content: messageToSend, chatId: selectedChat._id }, config);
+        
         socket.emit("new message", data);
         setMessages([...messages, data]);
+
+        // Jab TU message bheje, tab bhi teri chat TOP par aani chahiye
+        setChats((prevChats) => {
+          const chatIndex = prevChats.findIndex((c) => c._id === data.chat._id);
+          if (chatIndex !== -1) {
+            const chatToMove = prevChats[chatIndex];
+            chatToMove.latestMessage = data; 
+            const otherChats = prevChats.filter((c) => c._id !== data.chat._id);
+            return [chatToMove, ...otherChats];
+          }
+          return prevChats;
+        });
+
       } catch (error) { toast.error("Error sending message"); }
     }
   };
@@ -492,50 +521,12 @@ const Chatpage = () => {
 
             <div className="flex items-center gap-4">
 
-              {/* --- 1. NOTIFICATION BELL ICON --- */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsNotifOpen(!isNotifOpen)}
-                  className="text-2xl hover:scale-110 transition-transform relative top-1"
-                >
-                  🔔
-                  {notification.length > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-extrabold w-5 h-5 flex items-center justify-center rounded-full animate-bounce shadow-md border-2 border-white">
-                      {notification.length}
-                    </span>
-                  )}
-                </button>
-
-                {isNotifOpen && (
-                  <div className="absolute right-0 mt-3 w-64 bg-white rounded-xl shadow-2xl z-50 border border-gray-100 py-2 overflow-hidden">
-                    {!notification.length && <p className="px-4 py-2 text-sm text-gray-500 text-center">No New Messages</p>}
-
-                    {notification.map((notif) => (
-                      <div
-                        key={notif._id}
-                        className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer border-b border-gray-50 flex flex-col"
-                        onClick={() => {
-                          setSelectedChat(notif.chat);
-                          setNotification(notification.filter((n) => n.chat._id !== notif.chat._id));
-                          setIsNotifOpen(false);
-                        }}
-                      >
-                        <span className="font-bold text-gray-800">
-                          {notif.chat.isGroupChat ? `New message in ${notif.chat.chatName}` : `New message from ${notif.sender.name}`}
-                        </span>
-                        <span className="text-gray-500 text-xs truncate mt-0.5">{notif.content}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* --- 2. GROUP BUTTON --- */}
+              {/* --- 1. GROUP BUTTON --- */}
               <button onClick={() => setShowGroupModal(true)} className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-md text-sm font-bold transition-colors border border-blue-200 shadow-sm hidden md:block">
                 + Group
               </button>
 
-              {/* --- 3. PROFILE AVATAR --- */}
+              {/* --- 2. PROFILE AVATAR --- */}
               <div className="relative">
                 <img
                   src={userInfo?.pic || "https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg"}
@@ -583,13 +574,13 @@ const Chatpage = () => {
               const chatNameDisplay = c.isGroupChat ? c.chatName : otherUser.name;
               const chatPic = c.isGroupChat ? (c.groupPic || "https://cdn-icons-png.flaticon.com/512/166/166258.png") : (otherUser.pic || "https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg");
 
-              // --- NAYA LOGIC: Is chat ke kitne unread messages hain ---
+              // --- LOGIC: Is chat ke kitne unread messages hain ---
               const unreadCount = notification.filter((n) => n.chat._id === c._id).length;
 
               return (
                 <div key={c._id} onClick={() => {
                   setSelectedChat(c);
-                  // Jab chat open ho, toh us chat ki sari notification uda do
+                  // Jab chat open ho, toh us chat ki sari notification uda do taaki badge hat jaye
                   setNotification(notification.filter((n) => n.chat._id !== c._id));
                 }} className={`p-4 border-b border-gray-50 cursor-pointer flex items-center gap-4 transition-colors ${selectedChat?._id === c._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'}`}>
                   
