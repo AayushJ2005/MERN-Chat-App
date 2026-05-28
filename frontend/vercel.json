@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://mern-chat-app-o0zp.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 }
