@@ -600,7 +600,7 @@ const Chatpage = () => {
       )}
 
       {/* ---------------- LEFT SIDEBAR ---------------- */}
-      <div className="w-1/3 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10">
+      <div className={`${selectedChat ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white border-r border-gray-200 shadow-sm z-10`}>
         <div className="p-4 border-b border-gray-100 bg-gray-50">
 
           <div className="flex justify-between items-center mb-4">
@@ -705,10 +705,19 @@ const Chatpage = () => {
       </div>
 
       {/* ---------------- RIGHT CHAT WINDOW ---------------- */}
-      <div className="flex-1 flex flex-col bg-slate-50 relative">
+      <div className={`${selectedChat ? "flex" : "hidden md:flex"} flex-1 flex-col bg-slate-50 relative w-full`}>
         {selectedChat ? (
           <>
-            <div className="p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm flex items-center gap-4 sticky top-0 z-10">
+            <div className="p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm flex items-center gap-2 sm:gap-4 sticky top-0 z-10">
+              
+              {/* --- NAYA BACK BUTTON FOR MOBILE --- */}
+              <button 
+                onClick={() => setSelectedChat(null)} 
+                className="md:hidden text-gray-600 hover:text-blue-600 text-xl mr-1"
+              >
+                ⬅️
+              </button>
+
               <div className="relative">
                 <img
                   src={selectedChat.isGroupChat ? (selectedChat.groupPic || "https://cdn-icons-png.flaticon.com/512/166/166258.png") : ((selectedChat.users[0]._id === userInfo._id ? selectedChat.users[1].pic : selectedChat.users[0].pic) || "https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg")}
