@@ -17,7 +17,7 @@ app.use(express.json());
 // Express API ke liye CORS (BINA SLASH KE)
 // Express API ke liye CORS (BINA SLASH KE)
 app.use(cors({
-  origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173"] 
+  origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173", "https://chatnet-app.vercel.app"] 
 }));
 
 const server = createServer(app);
