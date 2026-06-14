@@ -66,6 +66,12 @@ io.on("connection", (socket) => {
     });
   });
 
+  // --- NAYA SOCKET: DELETE MESSAGE KELIYE ---
+  socket.on("delete message", (data) => {
+    // Jis room (chat) me message delete hua hai, usme sabko bata do
+    socket.in(data.room).emit("message deleted", data.messageId);
+  });
+
   // --- TYPING EVENTS ---
   socket.on("typing", (room) => socket.in(room).emit("typing"));
   socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));

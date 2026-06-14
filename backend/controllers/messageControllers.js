@@ -14,6 +14,14 @@ const sendMessage = asyncHandler(async (req, res) => {
     return res.sendStatus(400);
   }
 
+  // --- NAYA SECURITY CHECK ---
+  // Pehle check karo ki chat exist karti hai aur user usme hai ya nahi
+  const chatData = await Chat.findById(chatId);
+  if (chatData && chatData.isGroupChat && !chatData.users.includes(req.user._id)) {
+    res.status(403);
+    throw new Error("Action blocked: You are no longer part of this group!");
+  }
+
   var newMessage = {
     sender: req.user._id,
     content: content,
@@ -57,4 +65,16 @@ const allMessages = asyncHandler(async (req, res) => {
   }
 });
 
-export { allMessages, sendMessage };
+// --- NAYA FUNCTION: DELETE MESSAGE ---
+const deleteMessage = asyncHandler(async (req, res) => {
+  try {
+    const messageId = req.params.messageId;
+    await Message.findByIdAndDelete(messageId);
+    res.status(200).json({ success: true, messageId });
+  } catch (error) {
+    res.status(400);
+    throw new Error(error.message);
+  }
+});
+
+export { allMessages, sendMessage, deleteMessage };
