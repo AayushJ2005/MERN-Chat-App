@@ -851,7 +851,7 @@ const Chatpage = () => {
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center h-full bg-slate-50">
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center">
-              <h1 className="text-4xl text-blue-600 font-extrabold mb-4 tracking-tight">MERN Chat</h1>
+              <h1 className="text-4xl text-blue-600 font-extrabold mb-4 tracking-tight">ChatNet</h1>
               <p className="text-gray-500 text-base font-medium">Select a user to start chatting real-time.</p>
             </div>
           </div>
