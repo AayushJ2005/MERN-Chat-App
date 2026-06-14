@@ -437,6 +437,22 @@ const Chatpage = () => {
     }
   };
 
+  useEffect(() => {
+    if (selectedChat) {
+      window.history.pushState(null, null, window.location.href);
+    }
+
+    const handleBackButton = () => {
+      setSelectedChat(null);
+    };
+
+    window.addEventListener("popstate", handleBackButton);
+
+    return () => {
+      window.removeEventListener("popstate", handleBackButton);
+    };
+  }, [selectedChat]);
+
   return (
     <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans relative">
 
@@ -711,8 +727,8 @@ const Chatpage = () => {
             <div className="p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm flex items-center gap-2 sm:gap-4 sticky top-0 z-10">
               
               {/* --- NAYA BACK BUTTON FOR MOBILE --- */}
-              <button 
-                onClick={() => setSelectedChat(null)} 
+             <button 
+                onClick={() => window.history.back()} 
                 className="md:hidden text-gray-600 hover:text-blue-600 text-xl mr-1"
               >
                 ⬅️
