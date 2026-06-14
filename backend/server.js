@@ -26,7 +26,8 @@ const server = createServer(app);
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
-    origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173"], 
+    origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173", "https://chatnet-app.vercel.app"], 
+    credentials: true,
   },
 });
 
