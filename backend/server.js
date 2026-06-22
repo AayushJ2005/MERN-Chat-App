@@ -85,7 +85,12 @@ io.on("connection", (socket) => {
     socket.in(room).emit("message deleted", messageId);
   });
 
-  // Note: Maine yahan se "mark as read" wala experiment completely hata diya hai.
+  // --- NAYA REACTION SOCKET LOGIC ---
+  socket.on("new reaction", (reactionData) => {
+    // reactionData mein humein messageId, emoji, aur chatId milegi
+    socket.in(reactionData.chatId).emit("message reacted", reactionData);
+  });
+
 }); // io.on connection yahan khatam
 
 app.use("/api/user", userRoutes);

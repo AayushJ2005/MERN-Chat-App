@@ -62,6 +62,39 @@ const Chatpage = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
+  // --- REACTION STATES ---
+  const [reactionPickerId, setReactionPickerId] = useState(null);
+
+  const handleReaction = async (messageId, emoji) => {
+    try {
+      const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
+
+      // 1. API Call karke DataBase mein save karo
+      await axios.put("/api/message/react", { messageId, emoji }, config);
+
+      // 2. Apni screen par turant emoji dikhao (Optimistic UI)
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === messageId
+            ? { ...msg, reactions: [...(msg.reactions || []), { emoji, by: userInfo._id }] }
+            : msg
+        )
+      );
+
+      // 3. Socket ke through saamne wale ko signal bhejo
+      socket.emit("new reaction", {
+        messageId,
+        emoji,
+        chatId: selectedChat._id,
+        userId: userInfo._id
+      });
+
+      setReactionPickerId(null); // Popup band karo
+    } catch (error) {
+      toast.error("Failed to add reaction");
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -100,7 +133,7 @@ const Chatpage = () => {
     const context = canvasRef.current.getContext("2d");
     canvasRef.current.width = videoRef.current.videoWidth;
     canvasRef.current.height = videoRef.current.videoHeight;
-    
+
     // Video se image draw karo
     context.drawImage(videoRef.current, 0, 0);
 
@@ -200,7 +233,7 @@ const Chatpage = () => {
   useEffect(() => { fetchMessages(); }, [selectedChat]);
 
 
-  // --- BADA WALA useEffect YAHAN SE SHURU HOTA HAI ---
+  // --- BADA WALA useEffect YAHAN SE SHURU ---
   useEffect(() => {
     const messageListener = (newMessageRecieved) => {
       if (newMessageRecieved.sender._id !== userInfo._id) {
@@ -214,8 +247,6 @@ const Chatpage = () => {
         }
       } else {
         setMessages((prevMessages) => [...prevMessages, newMessageRecieved]);
-
-        // Agar chat open hai toh database mein read kar do 
         const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
         axios.put("/api/message/read", { chatId: selectedChat._id }, config).catch(err => console.log(err));
       }
@@ -237,23 +268,35 @@ const Chatpage = () => {
       setMessages((prevMessages) => prevMessages.filter((m) => m._id !== deletedMessageId));
     };
 
-    // 🔥 SHOT 3: WAPAS PURANA SIMPLE TYPING LISTENER LAGA DIYA 🔥
     const handleTyping = () => setIsTyping(true);
     const handleStopTyping = () => setIsTyping(false);
+
+    // 🔥 NAYA: REACTION LISTENER YAHAN LAGEGA 🔥
+    const reactionListener = (reactionData) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === reactionData.messageId
+            ? { ...msg, reactions: [...(msg.reactions || []), { emoji: reactionData.emoji, by: reactionData.userId }] }
+            : msg
+        )
+      );
+    };
 
     socket.on("message received", messageListener);
     socket.on("message deleted", deleteListener);
     socket.on("typing", handleTyping);
     socket.on("stop typing", handleStopTyping);
+    socket.on("message reacted", reactionListener); // Isko ON kiya
 
     return () => {
       socket.off("message received", messageListener);
       socket.off("message deleted", deleteListener);
       socket.off("typing", handleTyping);
       socket.off("stop typing", handleStopTyping);
+      socket.off("message reacted", reactionListener); // Isko OFF kiya
     };
   }, [selectedChat, notification]);
-  // --- BADA WALA useEffect YAHAN KHATAM HOTA HAI ---
+  // --- BADA WALA useEffect YAHAN KHATAM ---
 
   const typingHandler = (e) => {
     setNewMessage(e.target.value);
@@ -273,7 +316,7 @@ const Chatpage = () => {
       setTyping(false);
     }, 3000);
   };
-  
+
   const sendMessage = async (event) => {
     if (event.key === "Enter" && newMessage) {
       if (window.typingTimer) clearTimeout(window.typingTimer);
@@ -518,8 +561,8 @@ const Chatpage = () => {
 
     const data = new FormData();
     data.append("file", file);
-    data.append("upload_preset", "chat_app_preset"); 
-    data.append("cloud_name", "dkjuexjmp"); 
+    data.append("upload_preset", "chat_app_preset");
+    data.append("cloud_name", "dkjuexjmp");
 
     // 🔥 MAIN MAGIC: '/image/upload' ki jagah '/auto/upload' kar diya
     fetch("https://api.cloudinary.com/v1_1/dkjuexjmp/auto/upload", { method: "post", body: data })
@@ -575,20 +618,20 @@ const Chatpage = () => {
           <div className="bg-white p-5 rounded-3xl flex flex-col items-center gap-4 shadow-2xl relative">
             <button onClick={stopCamera} className="absolute top-4 right-5 text-gray-500 hover:text-red-500 font-bold text-xl">✕</button>
             <h2 className="text-xl font-extrabold text-gray-800">Take a Photo</h2>
-            
+
             {/* scale-x-[-1] isliye taaki mirror jaisa dikhe */}
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              className="w-full max-w-md bg-black rounded-xl shadow-inner transform scale-x-[-1]" 
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full max-w-md bg-black rounded-xl shadow-inner transform scale-x-[-1]"
             />
-            
+
             {/* Canvas hidden rahega, bas frame extract karne ke kaam aayega */}
             <canvas ref={canvasRef} className="hidden" />
-            
-            <button 
-              onClick={capturePhoto} 
+
+            <button
+              onClick={capturePhoto}
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-3 rounded-full shadow-lg transition flex items-center gap-2 mt-2"
             >
               📸 Capture & Send
@@ -982,10 +1025,10 @@ const Chatpage = () => {
                 messages
                   .filter((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map(m => (
-                    <div key={m._id} className={`flex items-center gap-3 w-full my-1 ${m.sender._id === userInfo._id ? "justify-end" : "justify-start"}`}>
-                      {/* --- NAYA UI: FLEX PARENT Jisme Checkbox aur Message dono hain --- */}
+                    // 🔥 1. YAHAN 'group' AUR 'relative' CLASS ADD KI HAI
+                    <div key={m._id} className={`flex items-center gap-3 w-full my-1 group relative ${m.sender._id === userInfo._id ? "justify-end" : "justify-start"}`}>
 
-                      {/* --- 1. CHECKBOX --- */}
+                      {/* --- 1. CHECKBOX (Select Mode ke liye) --- */}
                       {isSelectMode && (
                         <input
                           type="checkbox"
@@ -998,73 +1041,85 @@ const Chatpage = () => {
                         />
                       )}
 
-                      {/* --- 2. TERA PURANA MESSAGE CODE (Jo tune bheja tha) --- */}
-                      <div className={`flex flex-col ${m.sender._id === userInfo._id ? "items-end" : "items-start"}`}>
+                      <div className={`flex flex-col relative ${m.sender._id === userInfo._id ? "items-end" : "items-start"}`}>
 
                         {selectedChat.isGroupChat && m.sender._id !== userInfo._id && (
                           <span className="text-xs text-gray-500 mb-1 ml-1">{m.sender.name}</span>
                         )}
 
-                        <div className={`px-4 py-2 max-w-[100%] shadow-md flex flex-col ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
+                        <div className={`relative flex items-center ${m.sender._id === userInfo._id ? "flex-row-reverse" : "flex-row"}`}>
 
-                          {/* Agar Cloudinary ka link hai, toh check karo Image hai ya koi aur File */}
-                          {m.content.includes("res.cloudinary.com") ? (
-                            m.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
-                              <img
-                                src={m.content}
-                                alt="chat-img"
-                                className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover shadow-sm"
-                              />
+                          {/* --- MESSAGE BUBBLE --- */}
+                          <div className={`px-4 py-2 max-w-[100%] shadow-md flex flex-col ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
+                            {m.content.includes("res.cloudinary.com") ? (
+                              m.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                                <img src={m.content} alt="chat-img" className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover shadow-sm" />
+                              ) : (
+                                <a href={m.content} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 px-3 py-2 mt-1 rounded-lg transition text-sm font-bold shadow-sm border ${m.sender._id === userInfo._id ? "bg-blue-700 hover:bg-blue-800 text-white border-blue-500" : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"}`}>📄 View Document</a>
+                              )
                             ) : (
-                              <a 
-                                href={m.content} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className={`flex items-center gap-2 px-3 py-2 mt-1 rounded-lg transition text-sm font-bold shadow-sm border ${m.sender._id === userInfo._id ? "bg-blue-700 hover:bg-blue-800 text-white border-blue-500" : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"}`}
-                              >
-                                📄 View Document
-                              </a>
-                            )
-                          ) : (
-                            <span className="text-sm md:text-base break-words">
-                              {m.content}
-                            </span>
-                          )}
-
-                          {/* --- NAYA BOX: TIME, DATE AUR DELETE BUTTON --- */}
-                          <div className={`flex items-center gap-2 mt-1 self-end ${m.sender._id === userInfo._id ? "text-blue-200" : "text-gray-400"}`}>
-                            <span className="text-[9px] font-bold">
-                              {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(m.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}
-                            </span>
-
-                            {/* --- DELETE BUTTON (Sirf tab dikhega jab Select mode OFF ho) --- */}
-                            {/* BHAi YAHAN !isSelectMode LAGA DIYA HAI */}
-                            {!isSelectMode && m.sender._id === userInfo._id && (
-                              <button
-                                onClick={() => deleteMessage(m._id)}
-                                className="text-[10px] hover:text-red-300 hover:scale-125 transition-all"
-                                title="Delete for everyone"
-                              >
-                                🗑️
-                              </button>
+                              <span className="text-sm md:text-base break-words">{m.content}</span>
                             )}
 
-                            {/* --- READ RECEIPTS TICKS --- */}
-                            {m.sender._id === userInfo._id && (
-                              <span className="ml-1 text-[12px] font-bold tracking-tighter drop-shadow-sm">
-                                {m.readBy && m.readBy.length > 0 ? (
-                                  <span className="text-cyan-300">✓✓</span> /* Blue/Cyan Ticks (Read) */
-                                ) : (
-                                  <span className="text-white/60">✓✓</span> /* Dim Grey Ticks (Unread) */
-                                )}
+                            {/* --- TIME & DELETE & READ TICKS --- */}
+                            <div className={`flex items-center gap-2 mt-1 self-end ${m.sender._id === userInfo._id ? "text-blue-200" : "text-gray-400"}`}>
+                              <span className="text-[9px] font-bold">
+                                {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
+                              {!isSelectMode && m.sender._id === userInfo._id && (
+                                <button onClick={() => deleteMessage(m._id)} className="text-[10px] hover:text-red-300 hover:scale-125 transition-all" title="Delete for everyone">🗑️</button>
+                              )}
+                              {m.sender._id === userInfo._id && (
+                                <span className="ml-1 text-[12px] font-bold tracking-tighter drop-shadow-sm">
+                                  {m.readBy && m.readBy.length > 0 ? <span className="text-cyan-300">✓✓</span> : <span className="text-white/60">✓✓</span>}
+                                </span>
+                              )}
+                            </div>
+                            {/* --- 🔥 YAHAN DIKHENGE REACTIONS 🔥 --- */}
+                            {m.reactions && m.reactions.length > 0 && (
+                              <div className={`absolute bottom-[-12px] flex items-center gap-0.5 bg-white border border-gray-200 rounded-full px-1.5 py-0.5 shadow-sm text-xs z-10 ${m.sender._id === userInfo._id ? "left-2" : "right-2"}`}>
+                                {m.reactions.map((r, i) => (
+                                  <span key={i}>{r.emoji}</span>
+                                ))}
+                                {m.reactions.length > 1 && (
+                                  <span className="text-[10px] text-gray-500 font-bold ml-1">{m.reactions.length}</span>
+                                )}
+                              </div>
                             )}
-
                           </div>
+
+                          {/* --- 🔥 NAYA: HOVER REACTION BUTTON & EMOJI PICKER 🔥 --- */}
+                          {!isSelectMode && (
+                            <div className={`relative mx-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+
+                              {/* Smiley + Button */}
+                              <button
+                                onClick={() => setReactionPickerId(reactionPickerId === m._id ? null : m._id)}
+                                className="text-gray-400 hover:text-gray-600 bg-white/80 backdrop-blur-sm rounded-full p-1.5 shadow-sm border border-gray-200 hover:scale-110 transition-transform flex items-center justify-center"
+                                title="React"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line><path d="M16 19h6"></path><path d="M19 16v6"></path></svg>
+                              </button>
+
+                              {/* Emoji Picker Popup (Sirf tab dikhega jab state match hogi) */}
+                              {reactionPickerId === m._id && (
+                                <div className={`absolute top-[-50px] z-50 bg-white border border-gray-200 shadow-xl rounded-full px-3 py-2 flex items-center gap-3 ${m.sender._id === userInfo._id ? "right-0" : "left-0"}`}>
+                                  {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      onClick={() => handleReaction(m._id, emoji)}
+                                      className="hover:scale-150 transition-transform duration-200 text-xl"
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                         </div>
                       </div>
-
                     </div>
                   ))
               ) : <div className="flex items-center justify-center h-full"><p className="text-gray-500 font-medium bg-white px-6 py-2 rounded-full shadow-sm border border-gray-100">Say Hi to start the conversation! 👋</p></div>}
@@ -1085,20 +1140,20 @@ const Chatpage = () => {
 
                 {/* 📎 Attachment Button */}
                 <label className="cursor-pointer p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0">
-                  <input 
-                    type="file" 
-                    accept="image/*,.pdf,.doc,.docx,.txt,.zip" 
-                    className="hidden" 
-                    onChange={(e) => handleFileMessage(e.target.files[0])} 
-                    disabled={imageLoading} 
+                  <input
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx,.txt,.zip"
+                    className="hidden"
+                    onChange={(e) => handleFileMessage(e.target.files[0])}
+                    disabled={imageLoading}
                   />
                   {imageLoading ? <span className="animate-spin inline-block">⏳</span> : <span className="text-xl">📎</span>}
                 </label>
 
                 {/* 📷 NAYA: Live Camera Button */}
-                <button 
-                  onClick={startCamera} 
-                  className="p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0 text-xl" 
+                <button
+                  onClick={startCamera}
+                  className="p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0 text-xl"
                   disabled={imageLoading}
                   title="Open Camera"
                 >

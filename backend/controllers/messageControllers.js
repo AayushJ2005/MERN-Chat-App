@@ -104,6 +104,24 @@ const markMessagesAsRead = async (req, res) => {
   }
 };
 
+const reactToMessage = async (req, res) => {
+  try {
+    const { messageId, emoji } = req.body;
+    
+    // Message dhoondho aur usme reaction push (add) kar do
+    const message = await Message.findByIdAndUpdate(
+      messageId,
+      { $push: { reactions: { emoji, by: req.user._id } } },
+      { new: true }
+    )
+    .populate("sender", "name pic")
+    .populate("chat");
+    
+    res.json(message);
+  } catch (error) {
+    res.status(400);
+    throw new Error(error.message);
+  }
+};
 
-
-export { allMessages, sendMessage, deleteMessage, markMessagesAsRead};
+export { allMessages, sendMessage, deleteMessage, markMessagesAsRead, reactToMessage};

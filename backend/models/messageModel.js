@@ -13,6 +13,14 @@ const messageSchema = mongoose.Schema(
 
     // --- NAYA FIELD: Pata karne ke liye kisne padha ---
     readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+    // 🔥 NAYA FIELD: Reactions track karne ke liye
+    reactions: [
+      {
+        emoji: String,
+        by: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+      }
+    ]
   },
   { timestamps: true }
 );
