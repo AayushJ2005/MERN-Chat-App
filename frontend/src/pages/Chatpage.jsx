@@ -349,7 +349,7 @@ const Chatpage = () => {
         const { data } = await axios.post("/api/message", { content: messageToSend, chatId: selectedChat._id }, config);
 
         socket.emit("new message", data);
-        setMessages([...messages, data]);
+        setMessages((prevMessages) => [...prevMessages, data]);
 
         // Jab TU message bheje, tab bhi teri chat TOP par aani chahiye
         setChats((prevChats) => {
