@@ -222,6 +222,7 @@ const Chatpage = () => {
       // Sirf database mein read mark karega, socket tang nahi karega
       try {
         await axios.put("/api/message/read", { chatId: selectedChat._id }, config);
+        socket.emit("mark as read", selectedChat._id);
       } catch (err) {
         console.log("Error marking messages as read", err);
       }
@@ -249,6 +250,7 @@ const Chatpage = () => {
         setMessages((prevMessages) => [...prevMessages, newMessageRecieved]);
         const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
         axios.put("/api/message/read", { chatId: selectedChat._id }, config).catch(err => console.log(err));
+        socket.emit("mark as read", selectedChat._id);
       }
 
       setChats((prevChats) => {
@@ -282,11 +284,27 @@ const Chatpage = () => {
       );
     };
 
+    // 🔥 NAYA: BLUE TICK LISTENER 🔥
+    const readListener = (chatRoom) => {
+      // Agar meri current open chat wahi hai jiska message padha gaya hai
+      if (selectedChat && selectedChat._id === chatRoom) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            // Jo messages MAINE bheje the, unko "Read" mark karke UI update kar do
+            msg.sender._id === userInfo._id
+              ? { ...msg, readBy: [{ _id: "read_dummy" }] } // Ye blue tick trigger kar dega
+              : msg
+          )
+        );
+      }
+    };
+
     socket.on("message received", messageListener);
     socket.on("message deleted", deleteListener);
     socket.on("typing", handleTyping);
     socket.on("stop typing", handleStopTyping);
     socket.on("message reacted", reactionListener); // Isko ON kiya
+    socket.on("messages read", readListener);
 
     return () => {
       socket.off("message received", messageListener);
@@ -294,6 +312,7 @@ const Chatpage = () => {
       socket.off("typing", handleTyping);
       socket.off("stop typing", handleStopTyping);
       socket.off("message reacted", reactionListener); // Isko OFF kiya
+      socket.off("messages read", readListener);
     };
   }, [selectedChat, notification]);
   // --- BADA WALA useEffect YAHAN KHATAM ---

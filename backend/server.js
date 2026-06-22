@@ -81,6 +81,12 @@ io.on("connection", (socket) => {
     });
   });
 
+  // --- NAYA: BLUE TICK (READ) RELAY ---
+  socket.on("mark as read", (chatRoom) => {
+    // Jisne padha hai, wo room mein sabko batayega ki "padh liya"
+    socket.in(chatRoom).emit("messages read", chatRoom);
+  });
+
   socket.on("delete message", ({ messageId, room }) => {
     socket.in(room).emit("message deleted", messageId);
   });
