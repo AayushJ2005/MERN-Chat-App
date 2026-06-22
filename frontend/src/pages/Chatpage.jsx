@@ -470,45 +470,42 @@ const Chatpage = () => {
     }
   };
 
-  const handleImageMessage = (pic) => {
-    if (!pic) return;
+  const handleFileMessage = (file) => {
+    if (!file) return;
     setImageLoading(true);
 
-    if (pic.type === "image/jpeg" || pic.type === "image/png" || pic.type === "image/webp") {
-      const data = new FormData();
-      data.append("file", pic);
-      data.append("upload_preset", "chat_app_preset"); // Tera cloudinary preset
-      data.append("cloud_name", "dkjuexjmp"); // Tera cloud name
+    const data = new FormData();
+    data.append("file", file);
+    data.append("upload_preset", "chat_app_preset"); 
+    data.append("cloud_name", "dkjuexjmp"); 
 
-      fetch("https://api.cloudinary.com/v1_1/dkjuexjmp/image/upload", { method: "post", body: data })
-        .then((res) => res.json())
-        .then(async (data) => {
-          const imageUrl = data.url.toString();
+    // 🔥 MAIN MAGIC: '/image/upload' ki jagah '/auto/upload' kar diya
+    fetch("https://api.cloudinary.com/v1_1/dkjuexjmp/auto/upload", { method: "post", body: data })
+      .then((res) => res.json())
+      .then(async (data) => {
+        const fileUrl = data.url.toString();
 
-          // Seedha message bhej do
-          try {
-            const config = { headers: { "Content-type": "application/json", Authorization: `Bearer ${userInfo.token}` } };
-            const { data: newMsg } = await axios.post("/api/message", { content: imageUrl, chatId: selectedChat._id }, config);
+        try {
+          const config = { headers: { "Content-type": "application/json", Authorization: `Bearer ${userInfo.token}` } };
+          const { data: newMsg } = await axios.post("/api/message", { content: fileUrl, chatId: selectedChat._id }, config);
 
-            socket.emit("new message", newMsg);
-            setMessages([...messages, newMsg]);
+          socket.emit("new message", newMsg);
+          setMessages([...messages, newMsg]);
 
-            // Chat ko top par push karo
-            setChats((prevChats) => {
-              const chatIndex = prevChats.findIndex((c) => c._id === newMsg.chat._id);
-              if (chatIndex !== -1) {
-                const chatToMove = prevChats[chatIndex];
-                chatToMove.latestMessage = newMsg;
-                const otherChats = prevChats.filter((c) => c._id !== newMsg.chat._id);
-                return [chatToMove, ...otherChats];
-              }
-              return prevChats;
-            });
-            setImageLoading(false);
-          } catch (error) { toast.error("Error sending image"); setImageLoading(false); }
-        })
-        .catch((err) => { setImageLoading(false); toast.error("Image upload failed"); });
-    }
+          setChats((prevChats) => {
+            const chatIndex = prevChats.findIndex((c) => c._id === newMsg.chat._id);
+            if (chatIndex !== -1) {
+              const chatToMove = prevChats[chatIndex];
+              chatToMove.latestMessage = newMsg;
+              const otherChats = prevChats.filter((c) => c._id !== newMsg.chat._id);
+              return [chatToMove, ...otherChats];
+            }
+            return prevChats;
+          });
+          setImageLoading(false);
+        } catch (error) { toast.error("Error sending file"); setImageLoading(false); }
+      })
+      .catch((err) => { setImageLoading(false); toast.error("File upload failed"); });
   };
 
   useEffect(() => {
@@ -940,13 +937,24 @@ const Chatpage = () => {
 
                         <div className={`px-4 py-2 max-w-[100%] shadow-md flex flex-col ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
 
-                          {/* Agar URL hai toh Image dikhao, warna aslee Text */}
+                          {/* Agar Cloudinary ka link hai, toh check karo Image hai ya koi aur File */}
                           {m.content.includes("res.cloudinary.com") ? (
-                            <img
-                              src={m.content}
-                              alt="chat-img"
-                              className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover"
-                            />
+                            m.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                              <img
+                                src={m.content}
+                                alt="chat-img"
+                                className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover shadow-sm"
+                              />
+                            ) : (
+                              <a 
+                                href={m.content} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className={`flex items-center gap-2 px-3 py-2 mt-1 rounded-lg transition text-sm font-bold shadow-sm border ${m.sender._id === userInfo._id ? "bg-blue-700 hover:bg-blue-800 text-white border-blue-500" : "bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300"}`}
+                              >
+                                📄 View Document
+                              </a>
+                            )
                           ) : (
                             <span className="text-sm md:text-base break-words">
                               {m.content}
@@ -1007,7 +1015,13 @@ const Chatpage = () => {
 
                 {/* 📎 Attachment Button */}
                 <label className="cursor-pointer p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0">
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageMessage(e.target.files[0])} disabled={imageLoading} />
+                  <input 
+                    type="file" 
+                    accept="image/*,.pdf,.doc,.docx,.txt,.zip" 
+                    className="hidden" 
+                    onChange={(e) => handleFileMessage(e.target.files[0])} 
+                    disabled={imageLoading} 
+                  />
                   {imageLoading ? <span className="animate-spin inline-block">⏳</span> : <span className="text-xl">📎</span>}
                 </label>
 
