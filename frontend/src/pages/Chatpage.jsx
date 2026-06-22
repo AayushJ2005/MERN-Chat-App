@@ -56,6 +56,12 @@ const Chatpage = () => {
   const [isSelectMode, setIsSelectMode] = useState(false); // Select mode on/off
   const [selectedMessages, setSelectedMessages] = useState([]); // Select kiye hue messages ki list
 
+  // --- CAMERA STATES ---
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -68,6 +74,42 @@ const Chatpage = () => {
     localStorage.removeItem("userInfo");
     if (socket) socket.disconnect();
     navigate("/");
+  };
+
+  // --- NAYA CAMERA LOGIC ---
+  const startCamera = async () => {
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setCameraStream(stream);
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (err) {
+      toast.error("Camera access denied! 📷");
+      setShowCamera(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+    setCameraStream(null);
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const context = canvasRef.current.getContext("2d");
+    canvasRef.current.width = videoRef.current.videoWidth;
+    canvasRef.current.height = videoRef.current.videoHeight;
+    
+    // Video se image draw karo
+    context.drawImage(videoRef.current, 0, 0);
+
+    // Canvas ko file mein convert karke Cloudinary bhej do
+    canvasRef.current.toBlob((blob) => {
+      const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+      stopCamera(); // Camera band karo
+      handleFileMessage(file); // 🔥 TERA PURANA UPLOAD FUNCTION
+    }, "image/jpeg");
   };
 
   // --- CONNECTION & ONLINE STATUS SETUP ---
@@ -526,6 +568,34 @@ const Chatpage = () => {
 
   return (
     <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans relative">
+
+      {/* --- LIVE CAMERA MODAL --- */}
+      {showCamera && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+          <div className="bg-white p-5 rounded-3xl flex flex-col items-center gap-4 shadow-2xl relative">
+            <button onClick={stopCamera} className="absolute top-4 right-5 text-gray-500 hover:text-red-500 font-bold text-xl">✕</button>
+            <h2 className="text-xl font-extrabold text-gray-800">Take a Photo</h2>
+            
+            {/* scale-x-[-1] isliye taaki mirror jaisa dikhe */}
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              className="w-full max-w-md bg-black rounded-xl shadow-inner transform scale-x-[-1]" 
+            />
+            
+            {/* Canvas hidden rahega, bas frame extract karne ke kaam aayega */}
+            <canvas ref={canvasRef} className="hidden" />
+            
+            <button 
+              onClick={capturePhoto} 
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-3 rounded-full shadow-lg transition flex items-center gap-2 mt-2"
+            >
+              📸 Capture & Send
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* --- PROFILE MODAL --- */}
       {showProfileModal && (
@@ -1024,6 +1094,16 @@ const Chatpage = () => {
                   />
                   {imageLoading ? <span className="animate-spin inline-block">⏳</span> : <span className="text-xl">📎</span>}
                 </label>
+
+                {/* 📷 NAYA: Live Camera Button */}
+                <button 
+                  onClick={startCamera} 
+                  className="p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0 text-xl" 
+                  disabled={imageLoading}
+                  title="Open Camera"
+                >
+                  📷
+                </button>
 
                 <input className="flex-1 px-3 py-2 bg-transparent focus:outline-none text-gray-700 placeholder-gray-400" value={newMessage} onChange={typingHandler} onKeyDown={sendMessage} placeholder="Type a message and press Enter..." disabled={imageLoading} />
                 <button onClick={() => sendMessage({ key: 'Enter' })} className="bg-blue-600 text-white font-semibold w-10 h-10 rounded-full hover:bg-blue-700 transition flex items-center justify-center flex-shrink-0 shadow-md">➤</button>
