@@ -99,6 +99,11 @@ io.on("connection", (socket) => {
 
 }); // io.on connection yahan khatam
 
+// 🔥 NAYA: UptimeRobot ko khush rakhne ke liye route 🔥
+app.get("/", (req, res) => {
+  res.send("ChatNet API is running successfully! 🚀");
+});
+
 app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/message", messageRoutes);
