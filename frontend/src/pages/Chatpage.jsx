@@ -20,6 +20,7 @@ const Chatpage = () => {
 
   const [typing, setTyping] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [typingChats, setTypingChats] = useState([]);
 
   // --- ONLINE USERS ---
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -51,6 +52,10 @@ const Chatpage = () => {
   // --- NOTIFICATION STATE (Sirf array chahiye badge ke liye, ghanti hata di) ---
   const [notification, setNotification] = useState([]);
 
+  const [showMenu, setShowMenu] = useState(false); // 3-dots menu ke liye
+  const [isSelectMode, setIsSelectMode] = useState(false); // Select mode on/off
+  const [selectedMessages, setSelectedMessages] = useState([]); // Select kiye hue messages ki list
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -65,21 +70,38 @@ const Chatpage = () => {
     navigate("/");
   };
 
+  // --- CONNECTION & ONLINE STATUS SETUP ---
   useEffect(() => {
     if (userInfo) {
       setEditName(userInfo.name);
       setPic(userInfo.pic);
       socket = io(ENDPOINT);
-      socket.emit("setup", userInfo);
-
-      socket.on("typing", () => setIsTyping(true));
-      socket.on("stop typing", () => setIsTyping(false));
 
       socket.on("get-online-users", (users) => {
         setOnlineUsers(users);
       });
+
+      socket.on("typing", (chatId) => {
+        setTypingChats((prev) => [...new Set([...prev, chatId])]);
+      });
+
+      socket.on("stop typing", (chatId) => {
+        setTypingChats((prev) => prev.filter((id) => id !== chatId));
+      });
+
+      // 🔥 FIX 1: Page load hote hi turant bhej do (Taaki miss na ho)
+      socket.emit("setup", userInfo);
+
+      // 🔥 FIX 2: Agar server restart (crash) ho jaye, toh wapas judne par bhejo
+      socket.on("connect", () => {
+        socket.emit("setup", userInfo);
+      });
+
     }
-    return () => { if (socket) socket.disconnect(); };
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
   }, []);
 
   const fetchChats = async () => {
@@ -121,35 +143,46 @@ const Chatpage = () => {
       const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
       const { data } = await axios.get(`/api/message/${selectedChat._id}`, config);
       setMessages(data);
+
+      // Sirf database mein read mark karega, socket tang nahi karega
+      try {
+        await axios.put("/api/message/read", { chatId: selectedChat._id }, config);
+      } catch (err) {
+        console.log("Error marking messages as read", err);
+      }
+
       socket.emit("join chat", selectedChat._id);
     } catch (error) { console.error("Error fetching messages"); }
   };
 
   useEffect(() => { fetchMessages(); }, [selectedChat]);
 
-  // --- SOCKET LISTENER: NOTIFICATIONS, PUSH TO TOP & DELETE ---
+
+  // --- BADA WALA useEffect YAHAN SE SHURU HOTA HAI ---
   useEffect(() => {
     const messageListener = (newMessageRecieved) => {
-      // --- NAYA LOGIC: SOUND BJAO (Sirf agar message tera nahi hai) ---
       if (newMessageRecieved.sender._id !== userInfo._id) {
         const audio = new Audio("/ting.mp3");
         audio.play().catch((err) => console.log("Browser autoplay blocked", err));
       }
 
-      // (Tera pehle wala baaki ka code same rahega)
       if (!selectedChat || selectedChat._id !== newMessageRecieved.chat._id) {
         if (!notification.includes(newMessageRecieved)) {
           setNotification([newMessageRecieved, ...notification]);
         }
       } else {
         setMessages((prevMessages) => [...prevMessages, newMessageRecieved]);
+
+        // Agar chat open hai toh database mein read kar do 
+        const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
+        axios.put("/api/message/read", { chatId: selectedChat._id }, config).catch(err => console.log(err));
       }
-      
+
       setChats((prevChats) => {
         const chatIndex = prevChats.findIndex((c) => c._id === newMessageRecieved.chat._id);
         if (chatIndex !== -1) {
           const chatToMove = prevChats[chatIndex];
-          chatToMove.latestMessage = newMessageRecieved; 
+          chatToMove.latestMessage = newMessageRecieved;
           const otherChats = prevChats.filter((c) => c._id !== newMessageRecieved.chat._id);
           return [chatToMove, ...otherChats];
         } else {
@@ -158,39 +191,52 @@ const Chatpage = () => {
       });
     };
 
-    // --- NAYA: DOOSRE KA DELETE HUA MESSAGE APNI SCREEN SE HATANA ---
     const deleteListener = (deletedMessageId) => {
       setMessages((prevMessages) => prevMessages.filter((m) => m._id !== deletedMessageId));
     };
 
+    // 🔥 SHOT 3: WAPAS PURANA SIMPLE TYPING LISTENER LAGA DIYA 🔥
+    const handleTyping = () => setIsTyping(true);
+    const handleStopTyping = () => setIsTyping(false);
+
     socket.on("message received", messageListener);
-    socket.on("message deleted", deleteListener); // Delete wala socket on kiya
+    socket.on("message deleted", deleteListener);
+    socket.on("typing", handleTyping);
+    socket.on("stop typing", handleStopTyping);
 
     return () => {
       socket.off("message received", messageListener);
-      socket.off("message deleted", deleteListener); // Cleanup
+      socket.off("message deleted", deleteListener);
+      socket.off("typing", handleTyping);
+      socket.off("stop typing", handleStopTyping);
     };
   }, [selectedChat, notification]);
+  // --- BADA WALA useEffect YAHAN KHATAM HOTA HAI ---
 
   const typingHandler = (e) => {
     setNewMessage(e.target.value);
     if (!selectedChat) return;
-    if (!typing) { setTyping(true); socket.emit("typing", selectedChat._id); }
-    let lastTypingTime = new Date().getTime();
-    var timerLength = 3000;
-    setTimeout(() => {
-      var timeNow = new Date().getTime();
-      var timeDiff = timeNow - lastTypingTime;
-      if (timeDiff >= timerLength && typing) {
-        socket.emit("stop typing", selectedChat._id);
-        setTyping(false);
-      }
-    }, timerLength);
-  };
 
+    if (!typing) {
+      setTyping(true);
+      // 🔥 FIX 1: Exact wahi payload jo server ko chahiye
+      socket.emit("typing", selectedChat._id);
+    }
+
+    if (window.typingTimer) clearTimeout(window.typingTimer);
+
+    window.typingTimer = setTimeout(() => {
+      // 🔥 FIX 2: Exact wahi payload jo server ko chahiye
+      socket.emit("stop typing", selectedChat._id);
+      setTyping(false);
+    }, 3000);
+  };
+  
   const sendMessage = async (event) => {
     if (event.key === "Enter" && newMessage) {
+      if (window.typingTimer) clearTimeout(window.typingTimer);
       socket.emit("stop typing", selectedChat._id);
+      setTyping(false);
       try {
         const config = { headers: { "Content-type": "application/json", Authorization: `Bearer ${userInfo.token}` } };
         const messageToSend = newMessage;
@@ -235,6 +281,34 @@ const Chatpage = () => {
       toast.success("Message deleted! 🗑️");
     } catch (error) {
       toast.error("Failed to delete message!");
+    }
+  };
+
+  // --- NAYA FUNCTION: MULTIPLE DELETE KARNE KE LIYE (Promise.all ka jaadu) ---
+  const deleteSelectedMessages = async () => {
+    if (!window.confirm(`Delete ${selectedMessages.length} messages for everyone? 🗑️`)) return;
+
+    try {
+      const config = { headers: { Authorization: `Bearer ${userInfo.token}` } };
+
+      // Har select kiye hue message par delete API call karo ek saath
+      await Promise.all(selectedMessages.map(msgId =>
+        axios.delete(`/api/message/${msgId}`, config)
+      ));
+
+      // Khud ki screen se hatao
+      setMessages((prev) => prev.filter((m) => !selectedMessages.includes(m._id)));
+
+      // Doosre ki screen se hatane ke liye har message ka socket emit karo
+      selectedMessages.forEach(msgId => {
+        socket.emit("delete message", { messageId: msgId, room: selectedChat._id });
+      });
+
+      toast.success(`${selectedMessages.length} messages deleted! 🗑️`);
+      setIsSelectMode(false);
+      setSelectedMessages([]);
+    } catch (error) {
+      toast.error("Failed to delete some messages!");
     }
   };
 
@@ -706,11 +780,15 @@ const Chatpage = () => {
                       )}
                     </div>
 
-                    {/* --- BOLD TEXT HIGHIGHT --- */}
+                    {/* --- BOLD TEXT HIGHIGHT AUR NAYA TYPING INDICATOR --- */}
                     <p className={`text-xs truncate mt-0.5 ${unreadCount > 0 ? 'text-gray-800 font-bold' : 'text-gray-500'}`}>
-                      {c.latestMessage
-                        ? (c.latestMessage.content.includes("res.cloudinary.com") ? "📷 Image" : c.latestMessage.content)
-                        : "Start chatting..."}
+                      {typingChats.includes(c._id) ? (
+                        <span className="text-green-500 font-bold italic animate-pulse">typing...</span>
+                      ) : c.latestMessage ? (
+                        c.latestMessage.content.includes("res.cloudinary.com") ? "📷 Image" : c.latestMessage.content
+                      ) : (
+                        "Start chatting..."
+                      )}
                     </p>
                   </div>
                 </div>
@@ -725,10 +803,10 @@ const Chatpage = () => {
         {selectedChat ? (
           <>
             <div className="p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm flex items-center gap-2 sm:gap-4 sticky top-0 z-10">
-              
+
               {/* --- NAYA BACK BUTTON FOR MOBILE --- */}
-             <button 
-                onClick={() => window.history.back()} 
+              <button
+                onClick={() => window.history.back()}
                 className="md:hidden text-gray-600 hover:text-blue-600 text-xl mr-1"
               >
                 ⬅️
@@ -760,14 +838,34 @@ const Chatpage = () => {
                     )}
                   </div>
 
-                  {/* --- NAYA SEARCH TOGGLE BUTTON --- */}
-                  <button
-                    onClick={() => { setShowSearch(!showSearch); setSearchQuery(""); }}
-                    className="text-gray-500 hover:text-blue-600 transition bg-gray-100 w-8 h-8 flex items-center justify-center rounded-full shadow-sm ml-auto"
-                    title="Search Messages"
-                  >
-                    🔍
-                  </button>
+                  {/* --- 3 DOTS MENU --- */}
+                  <div className="relative ml-auto">
+                    <button
+                      onClick={() => setShowMenu(!showMenu)}
+                      className="text-gray-600 hover:text-blue-600 transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-2xl pb-2 font-bold"
+                      title="Menu"
+                    >
+                      ⋮
+                    </button>
+
+                    {/* DROPDOWN BOX */}
+                    {showMenu && (
+                      <div className="absolute right-0 mt-2 w-36 bg-white border border-gray-100 shadow-xl rounded-xl z-50 overflow-hidden flex flex-col">
+                        <button
+                          onClick={() => { setShowSearch(!showSearch); setShowMenu(false); }}
+                          className="text-left px-4 py-2.5 hover:bg-slate-50 text-sm font-medium text-gray-700 border-b border-gray-50 flex items-center gap-2 transition"
+                        >
+                          🔍 Search
+                        </button>
+                        <button
+                          onClick={() => { setIsSelectMode(true); setShowMenu(false); setSelectedMessages([]); }}
+                          className="text-left px-4 py-2.5 hover:bg-slate-50 text-sm font-medium text-gray-700 flex items-center gap-2 transition"
+                        >
+                          ☑️ Select
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* --- ONLINE / OFFLINE TEXT LIKHA AAYEGA --- */}
@@ -793,55 +891,101 @@ const Chatpage = () => {
             </div>
 
             {/* YAHAN SE REPLACE KARNA SHURU KAR */}
-            <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+            {/* --- ACTION BAR (Select Mode) --- */}
+            {isSelectMode && (
+              <div className="w-full bg-blue-50 border-b border-blue-200 p-2 flex justify-between items-center shadow-sm z-10 px-4 transition-all">
+                <span className="text-sm font-bold text-blue-700">{selectedMessages.length} selected</span>
+                <div className="flex gap-2">
+                  <button onClick={() => { setIsSelectMode(false); setSelectedMessages([]); }} className="px-3 py-1 bg-white text-gray-700 border border-gray-300 text-xs rounded-md font-bold hover:bg-gray-100 transition shadow-sm">Cancel</button>
+                  <button onClick={deleteSelectedMessages} disabled={selectedMessages.length === 0} className={`px-3 py-1 text-white text-xs rounded-md font-bold transition shadow-sm ${selectedMessages.length > 0 ? "bg-red-500 hover:bg-red-600" : "bg-red-300 cursor-not-allowed"}`}>🗑️ Delete</button>
+                </div>
+              </div>
+            )}
+            <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4"
+              style={{
+                // WhatsApp ka standard doodle pattern
+                backgroundImage: "url('/doodle.png')",
+                backgroundRepeat: "repeat",
+                backgroundSize: "400px", // Pattern ka size
+                backgroundColor: "#f1f5f9", // Tailwind slate-100 (Halka sa greyish base)
+                backgroundBlendMode: "color-burn", // Magic trick: Pattern ko ekdum transparent aur soft banane ke liye
+              }}
+            >
               {messages.length > 0 ? (
                 messages
                   .filter((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map(m => (
-                    <div key={m._id} className={`flex ${m.sender._id === userInfo._id ? "justify-end" : "justify-start"} flex-col ${m.sender._id === userInfo._id ? "items-end" : "items-start"}`}>
+                    <div key={m._id} className={`flex items-center gap-3 w-full my-1 ${m.sender._id === userInfo._id ? "justify-end" : "justify-start"}`}>
+                      {/* --- NAYA UI: FLEX PARENT Jisme Checkbox aur Message dono hain --- */}
 
-                      {selectedChat.isGroupChat && m.sender._id !== userInfo._id && (
-                        <span className="text-xs text-gray-500 mb-1 ml-1">{m.sender.name}</span>
+                      {/* --- 1. CHECKBOX --- */}
+                      {isSelectMode && (
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 cursor-pointer accent-blue-500 flex-shrink-0"
+                          checked={selectedMessages.includes(m._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedMessages([...selectedMessages, m._id]);
+                            else setSelectedMessages(selectedMessages.filter(id => id !== m._id));
+                          }}
+                        />
                       )}
 
-                      {/* --- NAYA UI: MESSAGE BUBBLE (TEXT YA IMAGE) --- */}
-                      {/* YAHAN SE REPLACE KARNA SHURU KAR */}
-                      {/* --- NAYA UI: MESSAGE BUBBLE (TEXT YA IMAGE) --- */}
-                      <div className={`px-4 py-2 max-w-[70%] shadow-md flex flex-col ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
+                      {/* --- 2. TERA PURANA MESSAGE CODE (Jo tune bheja tha) --- */}
+                      <div className={`flex flex-col ${m.sender._id === userInfo._id ? "items-end" : "items-start"}`}>
 
-                        {/* Agar URL hai toh Image dikhao, warna aslee Text */}
-                        {m.content.includes("res.cloudinary.com") ? (
-                          <img
-                            src={m.content}
-                            alt="chat-img"
-                            className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover"
-                          />
-                        ) : (
-                          <span className="text-sm md:text-base break-words">
-                            {m.content}
-                          </span>
+                        {selectedChat.isGroupChat && m.sender._id !== userInfo._id && (
+                          <span className="text-xs text-gray-500 mb-1 ml-1">{m.sender.name}</span>
                         )}
 
-                        {/* --- NAYA BOX: TIME, DATE AUR DELETE BUTTON --- */}
-                        <div className={`flex items-center gap-2 mt-1 self-end ${m.sender._id === userInfo._id ? "text-blue-200" : "text-gray-400"}`}>
-                          <span className="text-[9px] font-bold">
-                            {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(m.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}
-                          </span>
+                        <div className={`px-4 py-2 max-w-[100%] shadow-md flex flex-col ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
 
-                          {/* --- DELETE BUTTON (Sirf khud ke messages par) --- */}
-                          {m.sender._id === userInfo._id && (
-                            <button
-                              onClick={() => deleteMessage(m._id)}
-                              className="text-[10px] hover:text-red-300 hover:scale-125 transition-all"
-                              title="Delete for everyone"
-                            >
-                              🗑️
-                            </button>
+                          {/* Agar URL hai toh Image dikhao, warna aslee Text */}
+                          {m.content.includes("res.cloudinary.com") ? (
+                            <img
+                              src={m.content}
+                              alt="chat-img"
+                              className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover"
+                            />
+                          ) : (
+                            <span className="text-sm md:text-base break-words">
+                              {m.content}
+                            </span>
                           )}
-                        </div>
 
+                          {/* --- NAYA BOX: TIME, DATE AUR DELETE BUTTON --- */}
+                          <div className={`flex items-center gap-2 mt-1 self-end ${m.sender._id === userInfo._id ? "text-blue-200" : "text-gray-400"}`}>
+                            <span className="text-[9px] font-bold">
+                              {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(m.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                            </span>
+
+                            {/* --- DELETE BUTTON (Sirf tab dikhega jab Select mode OFF ho) --- */}
+                            {/* BHAi YAHAN !isSelectMode LAGA DIYA HAI */}
+                            {!isSelectMode && m.sender._id === userInfo._id && (
+                              <button
+                                onClick={() => deleteMessage(m._id)}
+                                className="text-[10px] hover:text-red-300 hover:scale-125 transition-all"
+                                title="Delete for everyone"
+                              >
+                                🗑️
+                              </button>
+                            )}
+
+                            {/* --- READ RECEIPTS TICKS --- */}
+                            {m.sender._id === userInfo._id && (
+                              <span className="ml-1 text-[12px] font-bold tracking-tighter drop-shadow-sm">
+                                {m.readBy && m.readBy.length > 0 ? (
+                                  <span className="text-cyan-300">✓✓</span> /* Blue/Cyan Ticks (Read) */
+                                ) : (
+                                  <span className="text-white/60">✓✓</span> /* Dim Grey Ticks (Unread) */
+                                )}
+                              </span>
+                            )}
+
+                          </div>
+
+                        </div>
                       </div>
-                      {/* YAHAN TAK REPLACE KARNA HAI */}
 
                     </div>
                   ))

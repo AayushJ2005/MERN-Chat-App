@@ -77,4 +77,33 @@ const deleteMessage = asyncHandler(async (req, res) => {
   }
 });
 
-export { allMessages, sendMessage, deleteMessage };
+// @description     Mark all messages in a chat as read
+// @route           PUT /api/message/read
+// @access          Protected
+const markMessagesAsRead = async (req, res) => {
+  try {
+    const { chatId } = req.body;
+
+    // Un saare messages ko dhoondho jo is chat ke hain, 
+    // jo tune nahi bheje (sender tu nahi hai), aur jisme tera naam 'readBy' mein nahi hai
+    const updatedMessages = await Message.updateMany(
+      { 
+        chat: chatId, 
+        sender: { $ne: req.user._id }, 
+        readBy: { $ne: req.user._id } 
+      },
+      { 
+        $push: { readBy: req.user._id } 
+      }
+    );
+
+    res.status(200).json({ message: "Messages marked as read", updatedMessages });
+  } catch (error) {
+    res.status(400);
+    throw new Error(error.message);
+  }
+};
+
+
+
+export { allMessages, sendMessage, deleteMessage, markMessagesAsRead};

@@ -10,6 +10,9 @@ const messageSchema = mongoose.Schema(
     
     // Yeh message kis chat (group ya personal) ka hissa hai?
     chat: { type: mongoose.Schema.Types.ObjectId, ref: "Chat" },
+
+    // --- NAYA FIELD: Pata karne ke liye kisne padha ---
+    readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );

@@ -17,7 +17,7 @@ app.use(express.json());
 // Express API ke liye CORS (BINA SLASH KE)
 // Express API ke liye CORS (BINA SLASH KE)
 app.use(cors({
-  origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173", "https://chatnet-app.vercel.app"] 
+  origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173", "https://chatnet-app.vercel.app"]
 }));
 
 const server = createServer(app);
@@ -26,40 +26,54 @@ const server = createServer(app);
 const io = new Server(server, {
   pingTimeout: 60000,
   cors: {
-    origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173", "https://chatnet-app.vercel.app"], 
+    origin: ["https://mern-chat-app-umber-phi.vercel.app", "http://localhost:5173", "https://chatnet-app.vercel.app"],
     credentials: true,
   },
 });
 
-// Online users track karne ke liye array
-let onlineUsers = [];
+// Global array
+// --- NAYA BULLETPROOF LOGIC: Ab hum har tab (socket) ko track karenge ---
+const userSocketMap = new Map();
 
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
 
-  // Jab user login/app kholta hai
+  // 1. JAB KOI NAYA TAB KHULEGA
   socket.on("setup", (userData) => {
     socket.join(userData._id);
     socket.emit("connected");
 
-    // Check karo agar user pehle se list mein nahi hai, toh add karo
-    if (!onlineUsers.some((user) => user.userId === userData._id)) {
-      onlineUsers.push({ userId: userData._id, socketId: socket.id });
-    }
-    
-    // Sab connected logo ko nayi list bhej do
-    io.emit("get-online-users", onlineUsers.map((user) => user.userId)); 
+    // NAYA: Is specific socket (tab) ko user ki ID assign karo Map ke andar
+    userSocketMap.set(socket.id, userData._id);
+
+    // NAYA: Set ka use karke duplicate IDs hatao (taaki list mein ek naam ek hi baar aaye)
+    const uniqueOnlineUsers = [...new Set(userSocketMap.values())];
+    io.emit("get-online-users", uniqueOnlineUsers);
   });
 
-  // Jab chat open karta hai
+  // 2. JAB KOI TAB BAND HOGA YA REFRESH HOGA
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
+
+    // NAYA: Sirf is tab ka socket delete karo, poora user nahi!
+    userSocketMap.delete(socket.id);
+
+    // NAYA: Baaki bache huye users ki nayi list sabko bhejo
+    const uniqueOnlineUsers = [...new Set(userSocketMap.values())];
+    io.emit("get-online-users", uniqueOnlineUsers);
+  });
+
+  // 👇 TERE PURANE STABLE EVENTS 👇
   socket.on("join chat", (room) => {
     socket.join(room);
   });
 
-  // REAL-TIME MESSAGE MAGIC
+  socket.on("typing", (room) => socket.in(room).emit("typing"));
+  socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
+
   socket.on("new message", (newMessageRecieved) => {
     var chat = newMessageRecieved.chat;
-    if (!chat.users) return;
+    if (!chat.users) return console.log("chat.users not defined");
 
     chat.users.forEach((user) => {
       if (user._id == newMessageRecieved.sender._id) return;
@@ -67,24 +81,12 @@ io.on("connection", (socket) => {
     });
   });
 
-  // --- NAYA SOCKET: DELETE MESSAGE KELIYE ---
-  socket.on("delete message", (data) => {
-    // Jis room (chat) me message delete hua hai, usme sabko bata do
-    socket.in(data.room).emit("message deleted", data.messageId);
+  socket.on("delete message", ({ messageId, room }) => {
+    socket.in(room).emit("message deleted", messageId);
   });
 
-  // --- TYPING EVENTS ---
-  socket.on("typing", (room) => socket.in(room).emit("typing"));
-  socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
-
-  // --- Jab user app band karta hai ya tab close karta hai ---
-  socket.on("disconnect", () => {
-    // User ko online list se nikal do
-    onlineUsers = onlineUsers.filter((user) => user.socketId !== socket.id);
-    // Baki sabko updated list bhej do
-    io.emit("get-online-users", onlineUsers.map((user) => user.userId));
-  });
-});
+  // Note: Maine yahan se "mark as read" wala experiment completely hata diya hai.
+}); // io.on connection yahan khatam
 
 app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
