@@ -578,27 +578,23 @@ const Chatpage = () => {
     if (!file) return;
     setImageLoading(true);
 
-    // 1. 🔥 NAYA LOGIC: Check kar ki file PDF/Doc hai ya nahi
-    const isDocument = file.type === "application/pdf" || 
-                       file.name.endsWith(".pdf") || 
-                       file.type.includes("officedocument");
+    // 🔥 FIX: Strict check for PDF
+    const isDocument = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
-    // 2. 🔥 DYNAMIC URL: Agar document hai toh 'raw', warna 'auto'
-    const uploadUrl = isDocument 
-      ? "https://api.cloudinary.com/v1_1/dkjuexjmp/raw/upload" 
+    // 🔥 FIX: URL logic
+    const uploadUrl = isDocument
+      ? "https://api.cloudinary.com/v1_1/dkjuexjmp/raw/upload"
       : "https://api.cloudinary.com/v1_1/dkjuexjmp/auto/upload";
 
     const data = new FormData();
     data.append("file", file);
-    data.append("upload_preset", "chat_app_preset"); // Tera existing preset
+    data.append("upload_preset", "chat_app_preset");
     data.append("cloud_name", "dkjuexjmp");
 
-    // 3. 🔥 Naye URL par fetch request maar
     fetch(uploadUrl, { method: "post", body: data })
       .then((res) => res.json())
       .then(async (data) => {
-        const fileUrl = data.url.toString();
-
+        let fileUrl = data.secure_url.toString();
         try {
           const config = { headers: { "Content-type": "application/json", Authorization: `Bearer ${userInfo.token}` } };
           const { data: newMsg } = await axios.post("/api/message", { content: fileUrl, chatId: selectedChat._id }, config);
@@ -617,16 +613,12 @@ const Chatpage = () => {
             return prevChats;
           });
           setImageLoading(false);
-        } catch (error) { 
-          toast.error("Error sending file"); 
-          setImageLoading(false); 
-        }
+        } catch (error) { toast.error("Error sending file"); setImageLoading(false); }
       })
-      .catch((err) => { 
-        setImageLoading(false); 
-        toast.error("File upload failed"); 
-      });
+      .catch((err) => { setImageLoading(false); toast.error("File upload failed"); });
   };
+
+
   useEffect(() => {
     if (selectedChat) {
       window.history.pushState(null, null, window.location.href);
