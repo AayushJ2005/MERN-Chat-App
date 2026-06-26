@@ -636,7 +636,7 @@ const Chatpage = () => {
   }, [selectedChat]);
 
   return (
-    <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans relative">
+    <div className="flex h-[100dvh] w-full bg-gray-100 overflow-x-hidden font-sans relative max-w-[100vw]">
 
       {/* --- LIVE CAMERA MODAL --- */}
       {showCamera && (
@@ -1076,7 +1076,7 @@ const Chatpage = () => {
                         <div className={`relative flex items-center ${m.sender._id === userInfo._id ? "flex-row-reverse" : "flex-row"}`}>
 
                           {/* --- MESSAGE BUBBLE --- */}
-                          <div className={`px-4 py-2 max-w-[100%] shadow-md flex flex-col ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
+                          <div className={`px-3 py-2 sm:px-4 max-w-[85%] sm:max-w-[75%] shadow-md flex flex-col break-words ${m.sender._id === userInfo._id ? "bg-blue-600 text-white rounded-2xl rounded-tr-sm" : "bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100"}`}>
                             {m.content.includes("res.cloudinary.com") ? (
                               m.content.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
                                 <img src={m.content} alt="chat-img" className="max-w-full sm:max-w-[250px] rounded-lg mt-1 cursor-pointer hover:opacity-90 transition object-cover shadow-sm" />
@@ -1161,8 +1161,8 @@ const Chatpage = () => {
             </div>
 
             {/* --- INPUT BAR WITH ATTACHMENT ICON --- */}
-            <div className="p-4 bg-transparent mb-2">
-              <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-200 px-2 py-2">
+            <div className="p-2 sm:p-4 bg-transparent mb-2 sm:mb-4 w-full max-w-full">
+              <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-200 px-1 sm:px-2 py-1.5 sm:py-2 w-full max-w-full overflow-hidden">
 
                 {/* 📎 Attachment Button */}
                 <label className="cursor-pointer p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0">
