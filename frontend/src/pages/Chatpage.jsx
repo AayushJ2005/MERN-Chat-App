@@ -938,7 +938,7 @@ const Chatpage = () => {
       <div className={`${selectedChat ? "flex" : "hidden md:flex"} flex-1 flex-col bg-slate-50 relative w-full`}>
         {selectedChat ? (
           <>
-            <div className="p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm flex items-center gap-2 sm:gap-4 sticky top-0 z-10">
+            <div className="py-2 px-3 sm:p-4 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-sm flex items-center gap-2 sm:gap-4 sticky top-0 z-10 w-full box-border">
 
               {/* --- NAYA BACK BUTTON FOR MOBILE --- */}
               <button
@@ -1161,11 +1161,11 @@ const Chatpage = () => {
             </div>
 
             {/* --- INPUT BAR WITH ATTACHMENT ICON --- */}
-            <div className="p-2 sm:p-4 bg-transparent mb-2 sm:mb-4 w-full max-w-full">
-              <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-200 px-1 sm:px-2 py-1.5 sm:py-2 w-full max-w-full overflow-hidden">
+            <div className="p-2 sm:p-4 bg-transparent mb-2 sm:mb-4 w-full max-w-full box-border">
+              <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-200 px-1 sm:px-2 py-1 sm:py-2 w-full max-w-full overflow-hidden box-border">
 
                 {/* 📎 Attachment Button */}
-                <label className="cursor-pointer p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0">
+                <label className="cursor-pointer p-1.5 sm:p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0">
                   <input
                     type="file"
                     accept="image/*,.pdf,.doc,.docx,.txt,.zip"
@@ -1173,21 +1173,36 @@ const Chatpage = () => {
                     onChange={(e) => handleFileMessage(e.target.files[0])}
                     disabled={imageLoading}
                   />
-                  {imageLoading ? <span className="animate-spin inline-block">⏳</span> : <span className="text-xl">📎</span>}
+                  {imageLoading ? <span className="animate-spin inline-block">⏳</span> : <span className="text-lg sm:text-xl">📎</span>}
                 </label>
 
-                {/* 📷 NAYA: Live Camera Button */}
+                {/* 📷 Live Camera Button */}
                 <button
                   onClick={startCamera}
-                  className="p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0 text-xl"
+                  className="p-1.5 sm:p-2 text-gray-500 hover:text-blue-600 transition hover:bg-gray-100 rounded-full flex-shrink-0 text-lg sm:text-xl"
                   disabled={imageLoading}
                   title="Open Camera"
                 >
                   📷
                 </button>
 
-                <input className="flex-1 px-3 py-2 bg-transparent focus:outline-none text-gray-700 placeholder-gray-400" value={newMessage} onChange={typingHandler} onKeyDown={sendMessage} placeholder="Type a message and press Enter..." disabled={imageLoading} />
-                <button onClick={() => sendMessage({ key: 'Enter' })} className="bg-blue-600 text-white font-semibold w-10 h-10 rounded-full hover:bg-blue-700 transition flex items-center justify-center flex-shrink-0 shadow-md">➤</button>
+                {/* 🔥 THE MAGIC FIX: min-w-0 aur chota placeholder */}
+                <input 
+                  className="flex-1 min-w-0 px-2 py-1.5 sm:py-2 bg-transparent focus:outline-none text-gray-700 placeholder-gray-400 text-sm" 
+                  value={newMessage} 
+                  onChange={typingHandler} 
+                  onKeyDown={sendMessage} 
+                  placeholder="Message..." 
+                  disabled={imageLoading} 
+                />
+                
+                {/* Send Button */}
+                <button 
+                  onClick={() => sendMessage({ key: 'Enter' })} 
+                  className="bg-blue-600 text-white font-semibold w-8 h-8 sm:w-10 sm:h-10 rounded-full hover:bg-blue-700 transition flex items-center justify-center flex-shrink-0 shadow-md ml-1"
+                >
+                  ➤
+                </button>
               </div>
             </div>
             {/* YAHAN TAK REPLACE KARNA HAI */}
